@@ -290,8 +290,8 @@ let parseInitDef definedFuns declaredConsts =
               let initLoc = if arg1 = IId firstId then arg2 else arg1 in
               match initLoc with
               | IId initLoc ->
-                { name = initProcedureName ;
-                  location = initLoc ;
+                { initProc = initProcedureName ;
+                  initLoc = initLoc ;
                   initVars = initPars ;
                   constr = initConstraint ;
                 };
@@ -335,7 +335,7 @@ let parseNextDefs definedFuns declaredConsts initVars =
         let postVars = List.tl postVars in
 
         (* check sorts *)
-        List.iteri
+        Utils.iteri
           (fun i ((_, s1), (_, s2)) ->
             if s1 <> s2 then raise (ParseException (sprintf "Function '%s' uses sort '%s' for %i-th argument in pre-vars, but '%s' in post-vars." n (Sort.to_string s1) (i+2) (Sort.to_string s2))))
           (List.combine preVars postVars);
@@ -363,7 +363,7 @@ let parseNextDefs definedFuns declaredConsts initVars =
             | _ ->
               raise (ParseException (sprintf "Function '%s' must be defined as '(or <trans-decl>*)'." n));
           in
-          { name = getNextProcedureName n ;
+          { procName = getNextProcedureName n ;
             preVars = preVars ;
             postVars = postVars;
             transitions = List.map parseTrans transitions;
@@ -397,19 +397,19 @@ let parseCallDefs definedFuns declaredConsts initVars =
 
         let callerLoc = fst (List.hd (List.hd splittedPars)) in
         let callerVars = List.hd splittedPars in
-        let calleeLoc = fst (List.hd (List.hd (List.tl splittedPars))) in
-        let calleeVars = List.hd (List.tl splittedPars) in
+        let calledLoc = fst (List.hd (List.hd (List.tl splittedPars))) in
+        let calledVars = List.hd (List.tl splittedPars) in
 
         (* pc is special-cased, drop from standard var list *)
         let callerVars = List.tl callerVars in
-        let calleeVars = List.tl calleeVars in
+        let calledVars = List.tl calledVars in
 
         let callerVarSet = varListToSet (List.map (fun (v,_) -> v) callerVars) in
-        let calleeVarSet = varListToSet (List.map (fun (v,_) -> v) calleeVars) in
+        let calledVarSet = varListToSet (List.map (fun (v,_) -> v) calledVars) in
         let declaredConstSet = varListToSet (List.map (fun (v,_) -> v) declaredConsts) in
-        let definedIDs = VarSet.union declaredConstSet (VarSet.union callerVarSet calleeVarSet) in
+        let definedIDs = VarSet.union declaredConstSet (VarSet.union callerVarSet calledVarSet) in
 
-        let (callerName, calleeName) = usedProcedureName n in
+        let (callerProcName, calledProcName) = usedProcedureName n in
         
         match parseBoolTerm callDef with
         | Or transitions ->
@@ -420,19 +420,19 @@ let parseCallDefs definedFuns declaredConsts initVars =
                   ; rel ] ->
               if not(callerLoc = pc) then
                 raise (ParseException (sprintf "First argument of cfs_trans2 should be calling state location."));
-              if not(calleeLoc = pc1) then
-                raise (ParseException (sprintf "Third argument of cfs_trans2 should be callee state location."));
+              if not(calledLoc = pc1) then
+                raise (ParseException (sprintf "Third argument of cfs_trans2 should be called state location."));
               let undeclVar = VarSet.fold (fun v acc -> VarSet.remove v acc) definedIDs (BoolTerm.getFreeVars rel) in
               if not(VarSet.is_empty undeclVar) then
-                raise (ParseException (sprintf "Call from '%s/%s' to '%s/%s' uses undeclared variable '%s' in relation '%s'" callerName src calleeName dst (VarSet.choose undeclVar) (BoolTerm.to_string_SMTLIB rel)));
+                raise (ParseException (sprintf "Call from '%s/%s' to '%s/%s' uses undeclared variable '%s' in relation '%s'" callerProcName src calledProcName dst (VarSet.choose undeclVar) (BoolTerm.to_string_SMTLIB rel)));
               (src, rel, dst)
             | _ ->
               raise (ParseException (sprintf "Function '%s' must be defined as '(or <trans-decl>*)'." n));
           in
-          { callerName = callerName ;
+          { callerProcName = callerProcName ;
             callerVars = callerVars ;
-            calleeName = calleeName ;
-            calleeVars = calleeVars ;
+            calledProcName = calledProcName ;
+            calledVars = calledVars ;
             callTrans = List.map parseTrans transitions;
           }
         | _ ->
@@ -616,12 +616,12 @@ let parse filename showWarnings warningsAreErrors =
         List.fold_left (fun acc loc ->
           if LocMap.mem loc acc then
             let oName = LocMap.find loc acc in
-            if oName <> pInfo.name then
-              raise (ParseException (sprintf "Location '%s' is used both in procedures '%s' and '%s'." loc oName pInfo.name))
+            if oName <> pInfo.procName then
+              raise (ParseException (sprintf "Location '%s' is used both in procedures '%s' and '%s'." loc oName pInfo.procName))
             else
               acc
           else
-            LocMap.add loc pInfo.name acc)
+            LocMap.add loc pInfo.procName acc)
           acc
           (Utils.concatMap (fun (l, _, l') -> [l ; l']) pInfo.transitions))
       LocMap.empty 
@@ -629,78 +629,78 @@ let parse filename showWarnings warningsAreErrors =
   in
 
   let sortMap =
-    List.fold_left (fun acc pInfo -> ProcedureMap.add pInfo.name (List.map snd pInfo.preVars) acc) ProcedureMap.empty procedureInfos
+    List.fold_left (fun acc pInfo -> ProcedureMap.add pInfo.procName (List.map snd pInfo.preVars) acc) ProcedureMap.empty procedureInfos
   in
   let checkSortLists l1 l2 explString =
-    List.iteri
+    Utils.iteri
       (fun i (s1, s2) ->
         if s1 <> s2 then raise (ParseException (sprintf "%s: %n-th variable has conflicting sorts '%s', '%s'." explString (i+2) (Sort.to_string s1) (Sort.to_string s2))))
       (List.combine l1 l2);
   in
 
   let checkInitInfo (i : initInfo) =
-    if not(ProcedureMap.mem i.name sortMap) then
-      warn (sprintf "Init in undefined procedure '%s'." i.name)
+    if not(ProcedureMap.mem i.initProc sortMap) then
+      warn (sprintf "Init in undefined procedure '%s'." i.initProc)
     else
       (
-        if not(LocMap.mem i.location locMap) then
-          warn (sprintf "Init in undefined location '%s'." i.location)
+        if not(LocMap.mem i.initLoc locMap) then
+          warn (sprintf "Init in undefined location '%s'." i.initLoc)
         else
           (
-            let initLocProcedure = LocMap.find i.location locMap in
-            if initLocProcedure <> i.name then
-              raise (ParseException (sprintf "Init starts in procedure '%s', but init location '%s' belongs to procedure '%s'." i.name i.location initLocProcedure));
+            let initLocProcedure = LocMap.find i.initLoc locMap in
+            if initLocProcedure <> i.initProc then
+              raise (ParseException (sprintf "Init starts in procedure '%s', but init location '%s' belongs to procedure '%s'." i.initProc i.initLoc initLocProcedure));
           );
 
-        let initNextSorts = ProcedureMap.find i.name sortMap in
+        let initNextSorts = ProcedureMap.find i.initProc sortMap in
         if (List.length initNextSorts) <> (List.length i.initVars) then
-          raise (ParseException (sprintf "Procedure '%s' has %i vars, but init assumes %i vars." i.name (List.length initNextSorts) (List.length i.initVars)));
+          raise (ParseException (sprintf "Procedure '%s' has %i vars, but init assumes %i vars." i.initProc (List.length initNextSorts) (List.length i.initVars)));
         checkSortLists 
           initNextSorts (List.map snd i.initVars)
-          (sprintf "Procedure '%s': Conflict between next and init definition" i.name)
+          (sprintf "Procedure '%s': Conflict between next and init definition" i.initProc)
       )
   in
 
   let checkCallInfo (c : callInformation) =
-    if not(ProcedureMap.mem c.callerName sortMap) then
-      warn (sprintf "Call from undefined procedure '%s' to '%s' seen." c.callerName c.calleeName)
-    else if not(ProcedureMap.mem c.calleeName sortMap) then
-      warn (sprintf "Call from procedure '%s' to undefined '%s' seen." c.callerName c.calleeName)
+    if not(ProcedureMap.mem c.callerProcName sortMap) then
+      warn (sprintf "Call from undefined procedure '%s' to '%s' seen." c.callerProcName c.calledProcName)
+    else if not(ProcedureMap.mem c.calledProcName sortMap) then
+      warn (sprintf "Call from procedure '%s' to undefined '%s' seen." c.callerProcName c.calledProcName)
     else
       (
-        let checkCallLocations (callerLoc, _, calleeLoc) =
+        let checkCallLocations (callerLoc, _, calledLoc) =
           if not(LocMap.mem callerLoc locMap) then
-            warn (sprintf "Call from '%s' to '%s' starting in undefined location '%s'." c.callerName c.calleeName callerLoc)
+            warn (sprintf "Call from '%s' to '%s' starting in undefined location '%s'." c.callerProcName c.calledProcName callerLoc)
           else
             (
               let callerLocProcedure = LocMap.find callerLoc locMap in
-              if callerLocProcedure <> c.callerName then
-                raise (ParseException (sprintf "Call from '%s' to '%s' in location '%s', which belongs to procedure '%s'." c.callerName c.calleeName callerLoc callerLocProcedure));
+              if callerLocProcedure <> c.callerProcName then
+                raise (ParseException (sprintf "Call from '%s' to '%s' in location '%s', which belongs to procedure '%s'." c.callerProcName c.calledProcName callerLoc callerLocProcedure));
             );
-          if not(LocMap.mem calleeLoc locMap) then
-            warn (sprintf "Call from '%s' to '%s' ending in undefined location '%s'." c.callerName c.calleeName calleeLoc)
+          if not(LocMap.mem calledLoc locMap) then
+            warn (sprintf "Call from '%s' to '%s' ending in undefined location '%s'." c.callerProcName c.calledProcName calledLoc)
           else
             (
-              let calleeLocProcedure = LocMap.find calleeLoc locMap in
-              if calleeLocProcedure <> c.calleeName then
-                raise (ParseException (sprintf "Call from '%s' to '%s' ending in location '%s', which belongs to procedure '%s'." c.callerName c.calleeName callerLoc calleeLocProcedure));
+              let calledLocProcedure = LocMap.find calledLoc locMap in
+              if calledLocProcedure <> c.calledProcName then
+                raise (ParseException (sprintf "Call from '%s' to '%s' ending in location '%s', which belongs to procedure '%s'." c.callerProcName c.calledProcName calledLoc calledLocProcedure));
             );
         in
         List.iter checkCallLocations c.callTrans;
 
-        let callerNextSorts = ProcedureMap.find c.callerName sortMap in
+        let callerNextSorts = ProcedureMap.find c.callerProcName sortMap in
         if (List.length callerNextSorts) <> (List.length c.callerVars) then
-          raise (ParseException (sprintf "Procedure '%s' has %i vars, but a call to '%s' with %i vars is defined." c.callerName (List.length callerNextSorts) c.calleeName (List.length c.callerVars)));
+          raise (ParseException (sprintf "Procedure '%s' has %i vars, but a call to '%s' with %i vars is defined." c.callerProcName (List.length callerNextSorts) c.calledProcName (List.length c.callerVars)));
         checkSortLists 
           callerNextSorts (List.map snd c.callerVars)
-          (sprintf "Procedure '%s': Conflict between next and call to '%s' definition" c.callerName c.calleeName);
+          (sprintf "Procedure '%s': Conflict between next and call to '%s' definition" c.callerProcName c.calledProcName);
 
-        let calleeNextSorts = ProcedureMap.find c.calleeName sortMap in
-        if (List.length calleeNextSorts) <> (List.length c.calleeVars) then
-          raise (ParseException (sprintf "Procedure '%s' has %i vars, but a call from '%s' with %i vars is defined." c.calleeName (List.length calleeNextSorts) c.callerName (List.length c.calleeVars)));
+        let calledNextSorts = ProcedureMap.find c.calledProcName sortMap in
+        if (List.length calledNextSorts) <> (List.length c.calledVars) then
+          raise (ParseException (sprintf "Procedure '%s' has %i vars, but a call from '%s' with %i vars is defined." c.calledProcName (List.length calledNextSorts) c.callerProcName (List.length c.calledVars)));
         checkSortLists 
-          calleeNextSorts (List.map snd c.calleeVars)
-          (sprintf "Procedure '%s': Conflict between next and call from location '%s' definition" c.calleeName c.callerName);
+          calledNextSorts (List.map snd c.calledVars)
+          (sprintf "Procedure '%s': Conflict between next and call from location '%s' definition" c.calledProcName c.callerProcName);
       )
   in
 

@@ -158,7 +158,7 @@ let output p terminationOnly =
   (* A call is represented as a simple transition, we forget about the stack *)
   let printCall c =
     let printCallTrans l preVars l' postVars r calleeProcName =
-      match Utils.tryFind (fun p -> p.name = calleeProcName) (Program.getAllProcedures p) with
+      match Utils.tryFind (fun p -> p.procName = calleeProcName) (Program.getAllProcedures p) with
       | Some p ->
         (* Project out sorts. *)
         let preVars = List.map fst p.preVars in
@@ -181,8 +181,8 @@ let output p terminationOnly =
       | None -> () (* Method has no next, just skip call *)
     in
     let preVars = c.callerVars in
-    let postVars = c.calleeVars in
-    List.iter (fun (l, rel, l') -> printCallTrans l preVars l' postVars rel c.calleeName) c.callTrans
+    let postVars = c.calledVars in
+    List.iter (fun (l, rel, l') -> printCallTrans l preVars l' postVars rel c.calledProcName) c.callTrans
   in
 
   (* A return is represented as a simple transition from pre-state to
@@ -196,7 +196,7 @@ let output p terminationOnly =
     List.iter (fun (_, callLoc, r, returnLoc) -> printTrans callLoc preVars returnLoc postVars r) r.returnTrans
   in
 
-  printf "START: %i;\n\n" (LocMap.find (Program.getInitInfo p).location locMap);
+  printf "START: %i;\n\n" (LocMap.find (Program.getInitInfo p).initLoc locMap);
   List.iter printProcedure (Program.getAllProcedures p);
   List.iter printCall (Program.getAllCalls p);
   List.iter printReturn (Program.getAllReturns p);

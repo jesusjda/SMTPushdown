@@ -38,15 +38,15 @@ let output p =
   let printInitInfo i =
     let initVarString = ppSortedVarList i.initVars in
 
-    printf "(define-fun init_%s ( (pc Loc) %s ) Bool\n" i.name initVarString;
-    printf "  (cfg_init pc %s %s))\n\n" i.location (BoolTerm.to_string_SMTLIB i.constr);
+    printf "(define-fun init_%s ( (pc Loc) %s ) Bool\n" i.initProc initVarString;
+    printf "  (cfg_init pc %s %s))\n\n" i.initLoc (BoolTerm.to_string_SMTLIB i.constr);
   in
 
   let printProcedureInfo p =
     let preVarString = ppSortedVarList p.preVars in
     let postVarString = ppSortedVarList p.postVars in
 
-    printf "(define-fun next_%s (\n" p.name;
+    printf "(define-fun next_%s (\n" p.procName;
     printf "                 (pc Loc) %s\n" preVarString;
     printf "                 (pc1 Loc) %s\n" postVarString;
     printf "             ) Bool\n";
@@ -60,11 +60,11 @@ let output p =
 
   let printCallInfo c = 
     let callerVarString = ppSortedVarList c.callerVars in
-    let calleeVarString = ppSortedVarList c.calleeVars in
+    let calledVarString = ppSortedVarList c.calledVars in
 
-    printf "(define-fun %s_call_%s (\n" c.callerName c.calleeName;
+    printf "(define-fun %s_call_%s (\n" c.callerProcName c.calledProcName;
     printf "                 (pc Loc) %s\n" callerVarString;
-    printf "                 (pc1 Loc) %s\n" calleeVarString;
+    printf "                 (pc1 Loc) %s\n" calledVarString;
     printf "             ) Bool\n";
     printf "  (or\n";
     List.iter 

@@ -69,16 +69,16 @@ let output p terminationOnly =
       (constraintToIntTRSString constr);
   in
 
-  let printProcedure p =
+  let printProcedure (p : procedureInformation) =
     let preVars = p.preVars in
     let postVars = p.postVars in
     List.iter (fun (l, rel, l') -> printTrans l preVars l' postVars rel) (Utils.concatMap normalizeTrans p.transitions)
   in
 
   (* A call is represented as a simple transition, we forget about the stack *)
-  let printCall c =
+  let printCall (c : callInformation) =
     let preVars = c.callerVars in
-    let postVars = c.calleeVars in
+    let postVars = c.calledVars in
     List.iter (fun (l, rel, l') -> printTrans l preVars l' postVars rel) (Utils.concatMap normalizeTrans c.callTrans)
   in
 
@@ -86,7 +86,7 @@ let output p terminationOnly =
      post-state. We ignore the new values obtained in r.calleeVars and
      do not bind these variables at all on the lhs -- they are then
      implicitly universally quantified.*)
-  let printReturn r =
+  let printReturn (r : returnInformation) =
     let preVars = r.callerPreVars in
     let postVars = r.callerPostVars in
     

@@ -101,9 +101,19 @@ let splitListBefore p l =
   else
     res
 
+(* Waiting for OCaml 4... *)
+
 let mapi f l =
   let rec mapi' f i l =
     match l with
     | x::xs -> (f i x)::(mapi' f (i+1) xs)
     | [] -> []
   in mapi' f 0 l
+
+let iteri f l =
+  let rec iteri' f i l =
+    match l with
+    | x::xs -> (f i x) ; (iteri' f (i+1) xs)
+    | [] -> ()
+  in iteri' f 0 l
+    

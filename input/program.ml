@@ -32,20 +32,20 @@ type procedureName = string
 type loc = string
 type transition = loc * BoolTerm.t * loc
 type returnTransition = loc * loc * BoolTerm.t * loc
-type initInfo = { name : procedureName ;
-                  location : loc ;
+type initInfo = { initProc : procedureName ;
+                  initLoc : loc ;
                   initVars : sortedVar list ;
                   constr : BoolTerm.t ;
                 }
-type procedureInformation = { name : procedureName ;
+type procedureInformation = { procName : procedureName ;
                               preVars : sortedVar list ;
                               postVars : sortedVar list ;
                               transitions : transition list ;
                          }
-type callInformation = { callerName : procedureName ;
+type callInformation = { callerProcName : procedureName ;
                          callerVars : sortedVar list ;
-                         calleeName : procedureName ;
-                         calleeVars : sortedVar list ;
+                         calledProcName : procedureName ;
+                         calledVars : sortedVar list ;
                          callTrans : transition list ;
                        }
 type returnInformation = { callerName : procedureName ;
