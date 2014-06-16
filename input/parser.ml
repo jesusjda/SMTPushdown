@@ -280,8 +280,9 @@ let parseInitDef definedFuns declaredConsts =
               let declaredConstSet = varListToSet (List.map (fun (v,_) -> v) declaredConsts) in
               let definedIDs = VarSet.union declaredConstSet initVarSet in
 
-              if not(VarSet.subset (BoolTerm.getFreeVars initConstraint) definedIDs) then
-                raise (ParseException (sprintf "Definition of '%s' uses undeclared variable in relation '%s'" n (BoolTerm.to_string_SMTLIB initConstraint)));
+              let undeclVar = VarSet.fold (fun v acc -> VarSet.remove v acc) definedIDs (BoolTerm.getFreeVars initConstraint) in
+              if not(VarSet.is_empty undeclVar) then
+                raise (ParseException (sprintf "Definition of '%s' uses undeclared variable '%s' in relation '%s'" n (VarSet.choose undeclVar) (BoolTerm.to_string_SMTLIB initConstraint)));
 
               ignore (Str.search_forward initRE n 0);
               let initProcedureName = Str.matched_group 1 n in
@@ -349,8 +350,9 @@ let parseNextDefs definedFuns declaredConsts initVars =
             | And [ Eq [IId "pc" ; IId src]
                   ; Eq [IId "pc1" ; IId dst]
                   ; rel ] ->
-              if not(VarSet.subset (BoolTerm.getFreeVars rel) definedIDs) then
-                raise (ParseException (sprintf "Transition from '%s' to '%s' uses undeclared variable in relation '%s'" src dst (BoolTerm.to_string_SMTLIB rel)));
+              let undeclVar = VarSet.fold (fun v acc -> VarSet.remove v acc) definedIDs (BoolTerm.getFreeVars rel) in
+              if not(VarSet.is_empty undeclVar) then
+                raise (ParseException (sprintf "Transition from '%s' to '%s' uses undeclared variable '%s' in relation '%s'" src dst (VarSet.choose undeclVar) (BoolTerm.to_string_SMTLIB rel)));
               (src, rel, dst)
             | _ ->
               raise (ParseException (sprintf "Function '%s' must be defined as '(or <trans-decl>*)'." n));
@@ -408,8 +410,9 @@ let parseCallDefs definedFuns declaredConsts initVars =
             | And [ Eq [IId "pc" ; IId src] 
                   ; Eq [IId "pc1" ; IId dst]
                   ; rel ] ->
-              if not(VarSet.subset (BoolTerm.getFreeVars rel) definedIDs) then
-                raise (ParseException (sprintf "Call from '%s/%s' to '%s/%s' uses undeclared variable in relation '%s'" callerName src calleeName dst (BoolTerm.to_string_SMTLIB rel)));
+              let undeclVar = VarSet.fold (fun v acc -> VarSet.remove v acc) definedIDs (BoolTerm.getFreeVars rel) in
+              if not(VarSet.is_empty undeclVar) then
+                raise (ParseException (sprintf "Call from '%s/%s' to '%s/%s' uses undeclared variable '%s' in relation '%s'" callerName src calleeName dst (VarSet.choose undeclVar) (BoolTerm.to_string_SMTLIB rel)));
               (src, rel, dst)
             | _ ->
               raise (ParseException (sprintf "Function '%s' must be defined as '(or <trans-decl>*)'." n));
@@ -473,8 +476,9 @@ let parseReturnDefs definedFuns declaredConsts initVars =
                   ; Eq [IId "pc1"; IId callL]
                   ; Eq [IId "pc2"; IId returnL]
                   ; rel ] ->
-              if not(VarSet.subset (BoolTerm.getFreeVars rel) definedIDs) then
-                raise (ParseException (sprintf "Return from '%s/%s' to '%s/%s' uses undeclared variable in relation '%s'" calleeName exitL callerName callL (BoolTerm.to_string_SMTLIB rel)));
+              let undeclVar = VarSet.fold (fun v acc -> VarSet.remove v acc) definedIDs (BoolTerm.getFreeVars rel) in
+              if not(VarSet.is_empty undeclVar) then
+                raise (ParseException (sprintf "Return from '%s/%s' to '%s/%s' uses undeclared variable '%s' in relation '%s'" calleeName exitL callerName callL (VarSet.choose undeclVar) (BoolTerm.to_string_SMTLIB rel)));
               (exitL, callL, rel, returnL)
             | _ ->
               raise (ParseException (sprintf "Function '%s' must be defined as '(or <trans3-decl>*)'." n));
