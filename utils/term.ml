@@ -187,7 +187,7 @@ module BoolTerm = struct
     | Not arg -> sprintf "(not %s)" (to_string_SMTLIB arg)
     | And args -> sprintf "(and %s)" (String.concat " " (List.map to_string_SMTLIB args))
     | Or args -> sprintf "(or %s)" (String.concat " " (List.map to_string_SMTLIB args))
-    | Exists (args, body) -> sprintf "(forall ( %s ) %s)" (String.concat " " (List.map (fun (i, s) -> sprintf "(%s %s)" i (Sort.to_string s)) args)) (to_string_SMTLIB body)
+    | Exists (args, body) -> sprintf "(exists ( %s ) %s)" (String.concat " " (List.map (fun (i, s) -> sprintf "(%s %s)" i (Sort.to_string s)) args)) (to_string_SMTLIB body)
     | Forall (args, body) -> sprintf "(forall ( %s ) %s)" (String.concat " " (List.map (fun (i, s) -> sprintf "(%s %s)" i (Sort.to_string s)) args)) (to_string_SMTLIB body)
 
     | Eq args -> sprintf "(= %s)" (String.concat " " (List.map IntTerm.to_string_SMTLIB args))
@@ -312,7 +312,7 @@ module BoolTerm = struct
 	| [] -> [seen]
       in distributeOr' [] conjuncts
     in 
-    (* normalize, then dnfify, then normalize for Or(Or(...), ...) crap. *)
+    (* normalize, then dnfify, then normalize for Or(Or(...), ...) stuff. *)
     normalize (toDNF' (normalize c false)) false
 end
 
