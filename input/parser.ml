@@ -329,7 +329,9 @@ let parseNextDefs definedFuns declaredConsts initVars =
           raise (ParseException (sprintf "Function '%s' must have middle parameter with sort 'Loc'." n));
 
         (* pc is special-cased, drop from standard var list *)
+        let prePc = fst (List.hd preVars) in
         let preVars = List.tl preVars in
+        let postPc = fst (List.hd postVars) in
         let postVars = List.tl postVars in
 
         (* check sorts *)
@@ -347,9 +349,13 @@ let parseNextDefs definedFuns declaredConsts initVars =
         | Or transitions ->
           let parseTrans t = 
             match t with
-            | And [ Eq [IId "pc" ; IId src]
-                  ; Eq [IId "pc1" ; IId dst]
+            | And [ Eq [IId pc ; IId src]
+                  ; Eq [IId pc1 ; IId dst]
                   ; rel ] ->
+              if not(prePc = pc) then
+                raise (ParseException (sprintf "First argument of cfs_trans2 should be pre-state location."));
+              if not(postPc = pc1) then
+                raise (ParseException (sprintf "Third argument of cfs_trans2 should be post-state location."));
               let undeclVar = VarSet.fold (fun v acc -> VarSet.remove v acc) definedIDs (BoolTerm.getFreeVars rel) in
               if not(VarSet.is_empty undeclVar) then
                 raise (ParseException (sprintf "Transition from '%s' to '%s' uses undeclared variable '%s' in relation '%s'" src dst (VarSet.choose undeclVar) (BoolTerm.to_string_SMTLIB rel)));
@@ -389,7 +395,9 @@ let parseCallDefs definedFuns declaredConsts initVars =
         if List.length splittedPars <> 2 then
           raise (ParseException (sprintf "Function '%s' must have two parameters of sort 'Loc'." n));
 
+        let callerLoc = fst (List.hd (List.hd splittedPars)) in
         let callerVars = List.hd splittedPars in
+        let calleeLoc = fst (List.hd (List.hd (List.tl splittedPars))) in
         let calleeVars = List.hd (List.tl splittedPars) in
 
         (* pc is special-cased, drop from standard var list *)
@@ -407,9 +415,13 @@ let parseCallDefs definedFuns declaredConsts initVars =
         | Or transitions ->
           let parseTrans t = 
             match t with
-            | And [ Eq [IId "pc" ; IId src] 
-                  ; Eq [IId "pc1" ; IId dst]
+            | And [ Eq [IId pc ; IId src] 
+                  ; Eq [IId pc1 ; IId dst]
                   ; rel ] ->
+              if not(callerLoc = pc) then
+                raise (ParseException (sprintf "First argument of cfs_trans2 should be calling state location."));
+              if not(calleeLoc = pc1) then
+                raise (ParseException (sprintf "Third argument of cfs_trans2 should be callee state location."));
               let undeclVar = VarSet.fold (fun v acc -> VarSet.remove v acc) definedIDs (BoolTerm.getFreeVars rel) in
               if not(VarSet.is_empty undeclVar) then
                 raise (ParseException (sprintf "Call from '%s/%s' to '%s/%s' uses undeclared variable '%s' in relation '%s'" callerName src calleeName dst (VarSet.choose undeclVar) (BoolTerm.to_string_SMTLIB rel)));
@@ -451,8 +463,11 @@ let parseReturnDefs definedFuns declaredConsts initVars =
         if List.length splittedPars <> 3 then
           raise (ParseException (sprintf "Function '%s' must have three parameters of sort 'Loc'." n));
 
+        let calleeLoc = fst (List.hd (List.hd splittedPars)) in
         let calleeVars = List.hd splittedPars in
+        let callerPreLoc = fst (List.hd (List.hd (List.tl splittedPars))) in
         let callerPreVars = List.hd (List.tl splittedPars) in
+        let callerPostLoc = fst (List.hd (List.hd (List.tl (List.tl splittedPars)))) in
         let callerPostVars = List.hd (List.tl (List.tl splittedPars)) in
 
         (* pc is special-cased, drop from standard var list *)
@@ -472,10 +487,16 @@ let parseReturnDefs definedFuns declaredConsts initVars =
         | Or transitions ->
           let parseTrans t = 
             match t with
-            | And [ Eq [IId "pc"; IId exitL] 
-                  ; Eq [IId "pc1"; IId callL]
-                  ; Eq [IId "pc2"; IId returnL]
+            | And [ Eq [IId pc; IId exitL] 
+                  ; Eq [IId pc1; IId callL]
+                  ; Eq [IId pc2; IId returnL]
                   ; rel ] ->
+              if not(calleeLoc = pc) then
+                raise (ParseException (sprintf "First argument of cfs_trans3 should be callee state location."));
+              if not(callerPreLoc = pc1) then
+                raise (ParseException (sprintf "Third argument of cfs_trans3 should be calling state location."));
+              if not(callerPostLoc = pc2) then
+                raise (ParseException (sprintf "Fifth argument of cfs_trans3 should be return state location."));
               let undeclVar = VarSet.fold (fun v acc -> VarSet.remove v acc) definedIDs (BoolTerm.getFreeVars rel) in
               if not(VarSet.is_empty undeclVar) then
                 raise (ParseException (sprintf "Return from '%s/%s' to '%s/%s' uses undeclared variable '%s' in relation '%s'" calleeName exitL callerName callL (VarSet.choose undeclVar) (BoolTerm.to_string_SMTLIB rel)));
