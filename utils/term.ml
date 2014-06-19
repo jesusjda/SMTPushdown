@@ -67,40 +67,44 @@ module IntTerm = struct
 
   let sort = Sort.SInt
 
-  let to_string_infix e =
+  let to_string_infix_vpp e varPP =
     let rec to_string_infix' force e =
       let protect strength force s =
 	if strength >= force then s else "(" ^ s ^ ")"
       in
       match e with
       | Const i -> string_of_big_int i
-      | IId(v) -> v
+      | IId(v) -> varPP v
       | Neg(e) -> "-" ^ (to_string_infix' 3 e)
       | Add (e1,e2) -> 
 	let larg = to_string_infix' 1 e1 in
 	let rarg = to_string_infix' 1 e2 in
-	if e1 = Const(zero_big_int) then
-	  protect 1 force rarg
-	else if e2 = Const(zero_big_int) then
-	  protect 1 force larg
-	else
-	  (
-	    match e2 with
-	    | Mul(Const(c), e22) -> 
-	      (
-		if c = (minus_big_int unit_big_int) then
-		  protect 1 force (to_string_infix' 1 e1 ^ "-" ^ to_string_infix' 2 e22)
-		else if lt_big_int c zero_big_int then
-		  protect 1 force (to_string_infix' 1 e1 ^ "-" ^ to_string_infix' 2 (Mul(Const(minus_big_int c), e22)))
-		else
-		  protect 1 force (to_string_infix' 1 e1 ^ "+" ^ to_string_infix' 1 e2)
-	      )
-	    | _ -> protect 1 force (to_string_infix' 1 e1 ^ "+" ^ to_string_infix' 1 e2)
-	  )
+        (
+          match (e1, e2) with
+          | (Const(c1), _) when eq_big_int c1 zero_big_int ->
+	    protect 1 force rarg
+          | (_, Const(c2)) when eq_big_int c2 zero_big_int ->
+	    protect 1 force larg
+          | _ ->
+	    (
+	      match e2 with
+	      | Mul(Const(c), e22) -> 
+	        (
+		  if eq_big_int c (minus_big_int unit_big_int) then
+		    protect 1 force (to_string_infix' 1 e1 ^ "-" ^ to_string_infix' 2 e22)
+		  else if lt_big_int c zero_big_int then
+		    protect 1 force (to_string_infix' 1 e1 ^ "-" ^ to_string_infix' 2 (Mul(Const(minus_big_int c), e22)))
+		  else
+		    protect 1 force (to_string_infix' 1 e1 ^ "+" ^ to_string_infix' 1 e2)
+	        )
+	      | _ -> protect 1 force (to_string_infix' 1 e1 ^ "+" ^ to_string_infix' 1 e2)
+	    )
+        )
       | Sub(e1,e2) -> protect 1 force (to_string_infix' 1 e1 ^ "-" ^ to_string_infix' 2 e2)
       | Mul(e1,e2) -> protect 2 force (to_string_infix' 2 e1 ^ "*" ^ to_string_infix' 2 e2)
     in
     to_string_infix' 0 e
+  let to_string_infix e = to_string_infix_vpp e (fun v -> v)
 
   let rec to_string_SMTLIB t =
     match t with
@@ -153,7 +157,8 @@ module BoolTerm = struct
 
   let sort = Sort.SBool
 
-  let to_string_infix e =
+  (* With variable pretty-printer (e.g. to normalize var names to convenient strings *)
+  let to_string_infix_vpp e varPP =
     let rec to_string_infix' force e =
       let protect strength force s =
 	if strength >= force then s else "(" ^ s ^ ")"
@@ -161,7 +166,7 @@ module BoolTerm = struct
       match e with
       | True -> "true"
       | False -> "false"
-      | BId(v) -> v
+      | BId(v) -> varPP v
       | Not(e) -> "not(" ^ (to_string_infix' 0 e) ^ ")"
       | Or [] -> "false"
       | Or (a1::[]) -> protect 1 force (to_string_infix' 1 a1)
@@ -171,14 +176,15 @@ module BoolTerm = struct
       | And (a1::args) -> protect 2 force (to_string_infix' 2 a1 ^ " && " ^ to_string_infix' 2 (And args))
       | Exists (vars, body) -> protect 0 force (Printf.sprintf "Ex. %s: %s" (String.concat ", " (List.map fst vars)) (to_string_infix' 0 body))
       | Forall (vars, body) -> protect 0 force (Printf.sprintf "For all %s: %s" (String.concat ", " (List.map fst vars)) (to_string_infix' 0 body))
-      | Eq args -> String.concat " = " (List.map IntTerm.to_string_infix args)
-      | Le (a, b) -> (IntTerm.to_string_infix a) ^ " <= " ^ (IntTerm.to_string_infix b)
-      | Ge (a, b) -> (IntTerm.to_string_infix a) ^ " >= " ^ (IntTerm.to_string_infix b)
-      | Lt (a, b) -> (IntTerm.to_string_infix a) ^ " < "  ^ (IntTerm.to_string_infix b)
-      | Gt (a, b) -> (IntTerm.to_string_infix a) ^ " > "  ^ (IntTerm.to_string_infix b)
+      | Eq args -> String.concat " = " (List.map (fun a -> IntTerm.to_string_infix_vpp a varPP) args)
+      | Le (a, b) -> (IntTerm.to_string_infix_vpp a varPP) ^ " <= " ^ (IntTerm.to_string_infix_vpp b varPP)
+      | Ge (a, b) -> (IntTerm.to_string_infix_vpp a varPP) ^ " >= " ^ (IntTerm.to_string_infix_vpp b varPP)
+      | Lt (a, b) -> (IntTerm.to_string_infix_vpp a varPP) ^ " < "  ^ (IntTerm.to_string_infix_vpp b varPP)
+      | Gt (a, b) -> (IntTerm.to_string_infix_vpp a varPP) ^ " > "  ^ (IntTerm.to_string_infix_vpp b varPP)
     in
     to_string_infix' 0 e
-
+  let to_string_infix e = to_string_infix_vpp e (fun x -> x)
+    
   let rec to_string_SMTLIB t =
     match t with
     | True -> "true"
