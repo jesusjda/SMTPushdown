@@ -31,8 +31,25 @@ open Term
 open Printf
 
 module LocMap = Map.Make(String)
+module VarMap = Map.Make(String)
 
 exception T2OutputException of string
+
+let var_pp_map = ref VarMap.empty  
+let t2_evil_re = Str.regexp "[^a-zA-Z0-9_']"
+let t2_var_pp v =
+  if not(VarMap.mem v !var_pp_map) then
+    (
+      let rec find_fresh_name v =
+        if VarMap.mem v !var_pp_map then
+          find_fresh_name (v ^ "'")
+        else
+          v
+      in
+      let newVName = find_fresh_name (Str.global_replace t2_evil_re "_" v) in
+      var_pp_map := VarMap.add v newVName !var_pp_map
+    );
+ VarMap.find v !var_pp_map
 
 let rec constraintToT2String c =
   match c with
@@ -48,7 +65,7 @@ let rec constraintToT2String c =
     constraintToT2String body
   | BoolTerm.Forall _ ->
     raise (T2OutputException "Cannot export universially quantified formula to T2 format.")
-  | a -> BoolTerm.to_string_infix a
+  | a -> BoolTerm.to_string_infix_vpp a t2_var_pp
 
 let output p terminationOnly =
   if Program.hasNonIntVars p then
@@ -64,9 +81,9 @@ let output p terminationOnly =
 
   let printTrans l preVars l' postVars r =
     printf "FROM: %i;\n" (LocMap.find l locMap);
-    List.iter (fun (v, _) -> printf " %s := nondet();\n" v) postVars;
+    List.iter (fun (v, _) -> printf " %s := nondet();\n" (t2_var_pp v)) postVars;
     printf " assume(%s);\n" (constraintToT2String r);
-    List.iter2 (fun (preV, _) (postV, _) -> printf " %s := %s;\n" preV postV) preVars postVars;
+    List.iter2 (fun (preV, _) (postV, _) -> printf " %s := %s;\n" (t2_var_pp preV) (t2_var_pp postV)) preVars postVars;
     printf "TO: %i;\n\n" (LocMap.find l' locMap);
   in
 
@@ -82,9 +99,9 @@ let output p terminationOnly =
       match Utils.tryFind (fun p -> p.name = calleeProcName) (Program.getAllProcedures p) with
       | Some p ->
 	printf "FROM: %i;\n" (LocMap.find l locMap);
-	List.iter (fun (v, _) -> printf " %s := nondet();\n" v) postVars;
+	List.iter (fun (v, _) -> printf " %s := nondet();\n" (t2_var_pp v)) postVars;
 	printf " assume(%s);\n" (constraintToT2String r);
-	List.iter2 (fun (preV, _) (postV, _) -> printf " %s := %s;\n" preV postV) p.preVars postVars;
+	List.iter2 (fun (preV, _) (postV, _) -> printf " %s := %s;\n" (t2_var_pp preV) (t2_var_pp postV)) p.preVars postVars;
 	printf "TO: %i;\n\n" (LocMap.find l' locMap);
       | None -> () (* Method has no next, just skip call *)
     in
