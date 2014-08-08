@@ -51,6 +51,29 @@ let t2_var_pp v =
     );
  VarMap.find v !var_pp_map
 
+(* Syntactic, weak check if a constaint implies equality v1 = v2 (by searching for a (v1 = v2) *)
+let rec impliesEquality c v1 v2 =
+  match c with
+  | BoolTerm.Eq eqs ->
+    let isVar v t =
+      match t with
+      | IntTerm.IId i -> i = v
+      | _ -> false
+    in
+    List.exists (isVar v1) eqs && List.exists (isVar v2) eqs
+  | BoolTerm.And conjuncts ->
+    List.fold_left (fun res t -> res || (impliesEquality t v1 v2)) false conjuncts
+  | BoolTerm.Or (disj::disjuncts) ->
+    List.fold_left (fun res t -> res && (impliesEquality t v1 v2)) (impliesEquality disj v1 v2) disjuncts
+  | BoolTerm.Exists (boundVars, t)
+  | BoolTerm.Forall (boundVars, t) ->
+    if not(List.exists (fun (i, _) -> v1 = i || v2 = i) boundVars) then
+      impliesEquality t v1 v2
+    else
+      false
+  | _ -> false
+     
+
 let rec constraintToT2String c =
   match c with
   | BoolTerm.True -> "(0 <= 0)"
@@ -79,11 +102,28 @@ let output p terminationOnly =
     (Utils.mapi (fun i l -> (l, i)) (Program.getAllLocations p))
   in
 
+  let computeUnchangedVars preVars postVars r =
+    List.fold_left2 
+      (fun (resPre, resPost) preV postV ->
+        if impliesEquality r preV postV then 
+          (preV::resPre, postV::resPost)
+        else
+          (resPre, resPost))
+      ([], [])
+      preVars
+      postVars in
+
   let printTrans l preVars l' postVars r =
+    (* Project out sorts. *)
+    let preVars = List.map fst preVars in
+    let postVars = List.map fst postVars in
     printf "FROM: %i;\n" (LocMap.find l locMap);
-    List.iter (fun (v, _) -> printf " %s := nondet();\n" (t2_var_pp v)) postVars;
+    let (unchangedPreVars, unchangedPostVars) = computeUnchangedVars preVars postVars r in
+    List.iter (fun v -> printf " %s := nondet();\n" (t2_var_pp v)) postVars;
     printf " assume(%s);\n" (constraintToT2String r);
-    List.iter2 (fun (preV, _) (postV, _) -> printf " %s := %s;\n" (t2_var_pp preV) (t2_var_pp postV)) preVars postVars;
+    List.iter2 (fun preV postV -> printf " %s := %s;\n" (t2_var_pp preV) (t2_var_pp postV)) 
+      (Utils.removeAll (=) preVars unchangedPreVars)
+      (Utils.removeAll (=) postVars unchangedPostVars);
     printf "TO: %i;\n\n" (LocMap.find l' locMap);
   in
 
@@ -96,12 +136,18 @@ let output p terminationOnly =
   (* A call is represented as a simple transition, we forget about the stack *)
   let printCall c =
     let printCallTrans l preVars l' postVars r calleeProcName =
+    (* Project out sorts. *)
       match Utils.tryFind (fun p -> p.name = calleeProcName) (Program.getAllProcedures p) with
       | Some p ->
+        let preVars = List.map fst p.preVars in
+        let postVars = List.map fst postVars in
 	printf "FROM: %i;\n" (LocMap.find l locMap);
-	List.iter (fun (v, _) -> printf " %s := nondet();\n" (t2_var_pp v)) postVars;
+        let (unchangedPreVars, unchangedPostVars) = computeUnchangedVars preVars postVars r in
+	List.iter (fun v -> printf " %s := nondet();\n" (t2_var_pp v)) postVars;
 	printf " assume(%s);\n" (constraintToT2String r);
-	List.iter2 (fun (preV, _) (postV, _) -> printf " %s := %s;\n" (t2_var_pp preV) (t2_var_pp postV)) p.preVars postVars;
+	List.iter2 (fun preV postV -> printf " %s := %s;\n" (t2_var_pp preV) (t2_var_pp postV))
+          (Utils.removeAll (=) preVars unchangedPreVars)
+          (Utils.removeAll (=) postVars unchangedPostVars);
 	printf "TO: %i;\n\n" (LocMap.find l' locMap);
       | None -> () (* Method has no next, just skip call *)
     in
