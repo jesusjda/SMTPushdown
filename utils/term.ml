@@ -130,6 +130,15 @@ module IntTerm = struct
       VarSet.union (getFreeVars a) (getFreeVars b)
     | Neg (a) ->
       getFreeVars a
+
+  let rec alpha alph t =
+    match t with
+    | IId v -> IId (alph v)
+    | Const c -> Const c
+    | Mul (t1, t2) -> Mul(alpha alph t1, alpha alph t2)
+    | Add (t1, t2) -> Add(alpha alph t1, alpha alph t2)
+    | Sub (t1, t2) -> Sub(alpha alph t1, alpha alph t2)
+    | Neg (t1)     -> Neg(alpha alph t1)
 end
 
 module BoolTerm = struct
@@ -320,6 +329,22 @@ module BoolTerm = struct
     in 
     (* normalize, then dnfify, then normalize for Or(Or(...), ...) stuff. *)
     normalize (toDNF' (normalize c false)) false
+
+  let rec alpha alph t =
+    match t with 
+    | True
+    | False -> t
+    | BId i -> BId (alph i)
+    | Not t -> alpha alph t
+    | And ts -> And (List.map (alpha alph) ts)
+    | Or ts -> Or (List.map (alpha alph) ts)
+    | Exists (vs, t) -> Exists (vs, (alpha (fun v -> if List.exists (fun (id, _) -> id = v) vs then v else alph v) t))
+    | Forall (vs, t) -> Forall (vs, (alpha (fun v -> if List.exists (fun (id, _) -> id = v) vs then v else alph v) t))
+    | Eq ts -> Eq (List.map (IntTerm.alpha alph) ts)
+    | Lt (t1, t2) -> Lt ((IntTerm.alpha alph t1), (IntTerm.alpha alph t2))
+    | Le (t1, t2) -> Le ((IntTerm.alpha alph t1), (IntTerm.alpha alph t2))
+    | Gt (t1, t2) -> Gt ((IntTerm.alpha alph t1), (IntTerm.alpha alph t2))
+    | Ge (t1, t2) -> Ge ((IntTerm.alpha alph t1), (IntTerm.alpha alph t2))
 end
 
 
