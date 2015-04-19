@@ -26,7 +26,7 @@
         ) Bool 
   (or 
     (cfg_trans2 pc loc0 pc1 loc1 (and (= k1 1) (= x1 x) ) )
-    (cfg_trans2 pc loc1 pc1 loc2 (and (exists ( (t Int) ) (and (> t 0) (= x t))) (= k1 k) (= x1 x) ) )
+    (cfg_trans2 pc loc1 pc1 loc2 (exists ( (t Int) ) (and (and (and (> t 0) (= x t)) (= k1 k)) (= x1 x) ) ) )
     (cfg_trans2 pc loc1 pc1 loc3 (and (not (> x 0)) (= k1 k) (= x1 x) ) )
     (cfg_trans2 pc loc2 pc1 loc1 (and (= k1 k) (= x1 (- x k)) ) )
   )

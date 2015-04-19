@@ -35,7 +35,7 @@ module VarMap = Map.Make(String)
 
 exception T2OutputException of string
 
-let var_pp_map = ref VarMap.empty  
+let var_pp_map = ref VarMap.empty
 let t2_evil_re = Str.regexp "[^a-zA-Z0-9_']"
 let t2_var_pp v =
   if not(VarMap.mem v !var_pp_map) then
@@ -77,16 +77,21 @@ let rec filterTrivial c =
   let isTrivial c =
     match c with
     | BoolTerm.Eq ((IntTerm.IId v1)::(IntTerm.IId v2)::[])
-    | BoolTerm.Le (IntTerm.IId v1, IntTerm.IId v2) 
+    | BoolTerm.Le (IntTerm.IId v1, IntTerm.IId v2)
     | BoolTerm.Ge (IntTerm.IId v1, IntTerm.IId v2) -> v1 = v2
     | _ -> false
   in
 
-  match c with 
+  match c with
   | BoolTerm.And conjuncts -> BoolTerm.And (List.filter (fun atom -> not (isTrivial atom)) (List.map filterTrivial conjuncts))
   | BoolTerm.Exists (boundVars, t) -> BoolTerm.Exists (boundVars, filterTrivial t)
   | BoolTerm.Forall (boundVars, t) -> BoolTerm.Forall (boundVars, filterTrivial t)
   | _ -> c
+
+let getExistentialVariables c =
+  match c with
+  | BoolTerm.Exists (vars, _) -> vars
+  | _ -> []
 
 let rec constraintToT2String c =
   match c with
@@ -99,29 +104,61 @@ let rec constraintToT2String c =
   | BoolTerm.Or args ->
     "(" ^ (String.concat " || " (List.map constraintToT2String args)) ^ ")"
   | BoolTerm.Not t -> sprintf "!(%s)" (constraintToT2String t)
-  | BoolTerm.Exists (_, body) -> 
+  | BoolTerm.Exists (_, body) ->
     (* implicitly existentially quantified *)
     constraintToT2String body
   | BoolTerm.Forall _ ->
     raise (T2OutputException "Cannot export universially quantified formula to T2 format.")
   | a -> BoolTerm.to_string_infix_vpp a t2_var_pp
 
-let output p terminationOnly =
+(* At the moment, we can only handle exists v1 ... vn . QF_formula as relations. *)
+let checkFormat p terminationOnly =
   if Program.hasNonIntVars p then
     raise (T2OutputException "T2 format does not support non-Int variables.");
   if terminationOnly && List.length (Program.getAllCalls p) > 0 then
     raise (T2OutputException "T2 format does not support recursion. A termination-preserving abstraction can be activated with --termination.");
 
-  let locMap = List.fold_left 
+  let checkRelationFormat r =
+    let rec quantifierFree c =
+      match c with
+      | BoolTerm.True
+      | BoolTerm.False -> ()
+      | BoolTerm.And args
+      | BoolTerm.Or args -> List.iter quantifierFree args
+      | BoolTerm.Not t -> quantifierFree t
+      | BoolTerm.Exists _ ->
+          raise (T2OutputException "Cannot handle nested existential quantifiers in export to T2 format.")
+      | BoolTerm.Forall _ ->
+          raise (T2OutputException "Cannot export universially quantified formula to T2 format.")
+      | _ -> () in
+    match r with
+    | BoolTerm.Forall _ ->
+        raise (T2OutputException "Cannot export universially quantified formula to T2 format.")
+    | BoolTerm.Exists (_, c)
+    | c ->
+        quantifierFree c in
+
+  let checkTrans (_, r, _) = checkRelationFormat r in
+  let checkReturn (_, _, r, _) = checkRelationFormat r in
+
+  List.iter checkTrans (Utils.concatMap (fun procedure -> procedure.transitions) (Program.getAllProcedures p));
+  List.iter checkTrans (Utils.concatMap (fun procedure -> procedure.callTrans) (Program.getAllCalls p));
+  List.iter checkReturn (Utils.concatMap (fun procedure -> procedure.returnTrans) (Program.getAllReturns p));
+;;
+
+let output p terminationOnly =
+  checkFormat p terminationOnly;
+
+  let locMap = List.fold_left
     (fun acc (l, id) -> LocMap.add l id acc)
     LocMap.empty
     (Utils.mapi (fun i l -> (l, i)) (Program.getAllLocations p))
   in
 
   let computeUnchangedVars preVars postVars r =
-    List.fold_left2 
+    List.fold_left2
       (fun (resPre, resPost) preV postV ->
-        if impliesEquality r preV postV then 
+        if impliesEquality r preV postV then
           (preV::resPre, postV::resPost)
         else
           (resPre, resPost))
@@ -133,6 +170,7 @@ let output p terminationOnly =
     (* Project out sorts. *)
     let preVars = List.map fst preVars in
     let postVars = List.map fst postVars in
+    let exVars = List.map fst (getExistentialVariables r) in
     printf "FROM: %i;\n" (LocMap.find l locMap);
     let (unchangedPreVars, unchangedPostVars) = computeUnchangedVars preVars postVars r in
     let unchangedPairs = List.combine unchangedPreVars unchangedPostVars in
@@ -142,8 +180,9 @@ let output p terminationOnly =
       | Some (preV, _) -> preV
     in
     List.iter (fun v -> printf " %s := nondet();\n" (t2_var_pp v)) (Utils.removeAll (=) postVars unchangedPostVars);
+    List.iter (fun v -> printf " %s := nondet();\n" (t2_var_pp v)) exVars;
     printf " assume(%s);\n" (constraintToT2String (filterTrivial (BoolTerm.alpha alph r)));
-    List.iter2 (fun preV postV -> printf " %s := %s;\n" (t2_var_pp preV) (t2_var_pp postV)) 
+    List.iter2 (fun preV postV -> printf " %s := %s;\n" (t2_var_pp preV) (t2_var_pp postV))
       (Utils.removeAll (=) preVars unchangedPreVars)
       (Utils.removeAll (=) postVars unchangedPostVars);
     printf "TO: %i;\n\n" (LocMap.find l' locMap);
@@ -163,6 +202,7 @@ let output p terminationOnly =
         (* Project out sorts. *)
         let preVars = List.map fst p.preVars in
         let postVars = List.map fst postVars in
+        let exVars = List.map fst (getExistentialVariables r) in
 	printf "FROM: %i;\n" (LocMap.find l locMap);
         let (unchangedPreVars, unchangedPostVars) = computeUnchangedVars preVars postVars r in
         let unchangedPairs = List.combine unchangedPreVars unchangedPostVars in
@@ -173,6 +213,7 @@ let output p terminationOnly =
         in
 
         List.iter (fun v -> printf " %s := nondet();\n" (t2_var_pp v)) (Utils.removeAll (=) postVars unchangedPostVars);
+        List.iter (fun v -> printf " %s := nondet();\n" (t2_var_pp v)) exVars;
         printf " assume(%s);\n" (constraintToT2String (filterTrivial (BoolTerm.alpha alph r)));
 	List.iter2 (fun preV postV -> printf " %s := %s;\n" (t2_var_pp preV) (t2_var_pp postV))
           (Utils.removeAll (=) preVars unchangedPreVars)
@@ -192,7 +233,7 @@ let output p terminationOnly =
   let printReturn r =
     let preVars = r.callerPreVars in
     let postVars = r.callerPostVars in
-    
+
     List.iter (fun (_, callLoc, r, returnLoc) -> printTrans callLoc preVars returnLoc postVars r) r.returnTrans
   in
 
