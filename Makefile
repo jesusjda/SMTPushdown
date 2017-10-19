@@ -1,4 +1,4 @@
-CONVERT_LIBS=-use-ocamlfind -pkg sexplib,str
+CONVERT_LIBS=-use-ocamlfind -pkg sexplib,str,num
 OPTS=-cflags -warn-error,+a
 
 default: convert.native
