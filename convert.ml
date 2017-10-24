@@ -30,6 +30,7 @@ type outputFormat =
   | SMTLib
   | IntTRS
   | T2
+  | FC
 
 type runMode = 
   | Validate
@@ -48,6 +49,7 @@ let rec parseFormat s =
   | "kittel"
   | "koat"    -> IntTRS
   | "t2"      -> T2
+  | "fc"      -> FC
   | "smtlib"
   | "smt"     -> SMTLib
   | _         -> print_usage (); exit 1
@@ -58,7 +60,7 @@ and speclist =
     ("--convert-to",   Arg.String (fun s -> runmode := ConvertTo (parseFormat s)), "");
     ("-convert-to",   Arg.String (fun s -> runmode := ConvertTo (parseFormat s)), "");
     ("--convertto",   Arg.String (fun s -> runmode := ConvertTo (parseFormat s)), "");
-    ("-convertto",    Arg.String (fun s -> runmode := ConvertTo (parseFormat s)), "  - Convert input file to given format (SMTLib/IntTRS/T2)");
+    ("-convertto",    Arg.String (fun s -> runmode := ConvertTo (parseFormat s)), "  - Convert input file to given format (SMTLib/IntTRS/T2/FC)");
     ("--warnings",    Arg.Unit   (fun () -> enableWarnings := true), "");
     ("-warnings",     Arg.Unit   (fun () -> enableWarnings := true), "   - Show warnings.");
     ("--strict",      Arg.Unit   (fun () -> warningsAsErrors := true), "");
@@ -98,6 +100,9 @@ let main () =
           exit 0;
 	| ConvertTo T2 ->
           T2Format.output p !terminationOnly;
+          exit 0;
+        | ConvertTo FC ->
+          FCFormat.output p !terminationOnly;
           exit 0;
       with 
       | Parser.ParseException msg -> 
