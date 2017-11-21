@@ -1,7 +1,7 @@
 (*
   Fc output
 
-  @author Marc Brockschmidt
+  @author Jesus Domenech
 
   Copyright 2014 Microsoft Research
 
@@ -119,9 +119,9 @@ let output p terminationOnly =
     List.fold_left2
       (fun (resPre, resPost) preV postV ->
         if impliesEquality r preV postV then
-          (preV::resPre, postV::resPost)
+          (resPre, resPost)
         else
-          (resPre, resPost))
+          (preV::resPre, postV::resPost))
       ([], [])
       preVars
       postVars in
@@ -178,6 +178,7 @@ let output p terminationOnly =
   in
   printf ".vars {\n%s\n}\n" ("  " ^ String.concat ", " pre );
   printf "\n.pvars {\n%s\n}\n"("  " ^ String.concat ", " post );
+  printf "\n.initnode: %s\n" ((fun(p : initInfo) -> p.initLoc) (Program.getInitInfo p));
   List.iter printProcedure (Program.getAllProcedures p);
 (*  List.iter printCall (Program.getAllCalls p);
   List.iter printReturn (Program.getAllReturns p);*)
