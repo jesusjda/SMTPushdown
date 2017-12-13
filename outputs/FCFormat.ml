@@ -36,7 +36,7 @@ module VarMap = Map.Make(String)
 exception FcOutputException of string
 
 let var_pp_map = ref VarMap.empty
-let t2_evil_re = Str.regexp "[^a-zA-Z0-9_']"
+let t2_evil_re = Str.regexp "[^a-zA-Z0-9_'\\^]"
 let t2_var_pp v =
   if not(VarMap.mem v !var_pp_map) then
     (
@@ -102,7 +102,7 @@ let rec constraintToFcString c =
      raise (FcOutputException "Found unexpected negation in normalized constraint")
   | BoolTerm.Or args ->
      raise (FcOutputException "Found unexpected disjunct in normalized constraint")
-  | a -> BoolTerm.to_string_infix a
+  | a -> BoolTerm.to_string_infix_vpp a t2_var_pp
 
 let output p terminationOnly =
   if Program.hasNonIntVars p then
@@ -159,7 +159,7 @@ let output p terminationOnly =
         let rec computeExVars trans =
           match trans with
           | [] -> []
-          | (l,rel,l')::r -> unique_append_list (List.map fst (getExistentialVariables rel)) (computeExVars r)
+          | (l,rel,l')::r -> unique_append_list (List.map t2_var_pp (List.map fst (getExistentialVariables rel))) (computeExVars r)
         in
         let exVars = computeExVars p.transitions in          
         let (resPre,resPost) = (
