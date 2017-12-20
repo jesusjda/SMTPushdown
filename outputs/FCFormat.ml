@@ -36,7 +36,7 @@ module VarMap = Map.Make(String)
 exception FcOutputException of string
 
 let var_pp_map = ref VarMap.empty
-let t2_evil_re = Str.regexp "[^a-zA-Z0-9_'\\^]"
+let t2_evil_re = Str.regexp "[^a-zA-Z0-9_'\\^\\!]"
 let t2_var_pp v =
   if not(VarMap.mem v !var_pp_map) then
     (
