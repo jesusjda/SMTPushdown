@@ -36,7 +36,7 @@ module VarMap = Map.Make(String)
 exception FcOutputException of string
 
 let var_pp_map = ref VarMap.empty
-let t2_evil_re = Str.regexp "[^a-zA-Z0-9_'\\^\\!]"
+let t2_evil_re = Str.regexp "[^a-zA-Z0-9_']"
 let t2_var_pp v =
   if not(VarMap.mem v !var_pp_map) then
     (
@@ -154,8 +154,9 @@ let output p terminationOnly =
   (*(String.concat ",>>" (List.iter l))*)
   let getVarsProcs listproc preV postV =
     List.fold_left (fun (resPre, resPost) p ->
-        let preVars = List.map fst p.preVars in
-        let postVars = List.map fst p.postVars in
+        let getV v = t2_var_pp (fst v) in
+        let preVars = List.map getV p.preVars in
+        let postVars = List.map getV p.postVars in
         let rec computeExVars trans =
           match trans with
           | [] -> []
