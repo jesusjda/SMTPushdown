@@ -154,8 +154,9 @@ let output p terminationOnly =
   (*(String.concat ",>>" (List.iter l))*)
   let getVarsProcs listproc preV postV =
     List.fold_left (fun (resPre, resPost) p ->
-        let preVars = List.map fst p.preVars in
-        let postVars = List.map fst p.postVars in
+        let getV v = t2_var_pp (fst v) in
+        let preVars = List.map getV p.preVars in
+        let postVars = List.map getV p.postVars in
         (*let rec computeExVars trans =
           match trans with
           | [] -> []
