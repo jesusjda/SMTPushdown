@@ -36,7 +36,7 @@ module VarMap = Map.Make(String)
 exception FcOutputException of string
 
 let var_pp_map = ref VarMap.empty
-let t2_evil_re = Str.regexp "[^a-zA-Z0-9_']"
+let t2_evil_re = Str.regexp "[^a-zA-Z0-9_'\\^\\!]"
 let t2_var_pp v =
   if not(VarMap.mem v !var_pp_map) then
     (
@@ -130,11 +130,11 @@ let output p terminationOnly =
     let preVars = List.map fst preVars in
     let postVars = List.map fst postVars in
     let (unchangedPreVars, unchangedPostVars) = computeUnchangedVars preVars postVars constr in
-    printf "{name : %s, source : %s, target: %s, constraints: [\n" t l l';
+    printf ".trans %s : %s -> %s{\n" t l l';
     List.iter2 (fun preV postV -> printf "    %s = %s,\n" (t2_var_pp preV) (t2_var_pp postV))
       (Utils.removeAll (=) preVars unchangedPreVars)
       (Utils.removeAll (=) postVars unchangedPostVars);
-    printf "%s \n]},\n"(constraintToFcString constr);
+    printf "%s \n}\n"(constraintToFcString constr);
   in
 
   (*let rec printTransList tag (id : int) (trans: transition list) =
@@ -156,32 +156,29 @@ let output p terminationOnly =
     List.fold_left (fun (resPre, resPost) p ->
         let preVars = List.map fst p.preVars in
         let postVars = List.map fst p.postVars in
-        (*let rec computeExVars trans =
+        let rec computeExVars trans =
           match trans with
           | [] -> []
           | (l,rel,l')::r -> unique_append_list (List.map t2_var_pp (List.map fst (getExistentialVariables rel))) (computeExVars r)
         in
         let exVars = computeExVars p.transitions in          
-        let (resPre,resPost) = *)(
+        let (resPre,resPost) = (
             unique_append_list resPre (preVars),
             unique_append_list resPost (postVars)
           )
-        (*in
+        in
         (
           unique_append_list resPre exVars,
           unique_append_list resPost (add_prime exVars)
-        )*)
-      ) (List.map t2_var_pp preV, List.map t2_var_pp postV) listproc
+        )
+      ) (preV, postV) listproc
   in
   (*  let (pre, post) = printVars (Program.getAllProcedures p) (Program.getAllCalls p) (Program.getAllReturns p)  *)
   let (pre, post) = getVarsProcs (Program.getAllProcedures p) [] []
   in
-  printf "{";
-  printf "vars : [\n%s\n],\n" ("  " ^ String.concat ", " (List.map t2_var_pp pre) );
-  printf "\npvars : [\n%s\n],\n"("  " ^ String.concat ", " (List.map t2_var_pp post) );
-  printf "\ninitnode : %s,\n" ((fun(p : initInfo) -> p.initLoc) (Program.getInitInfo p));
-  printf "\ntransitions : [\n";
+  printf ".vars {\n%s\n}\n" ("  " ^ String.concat ", " pre );
+  printf "\n.pvars {\n%s\n}\n"("  " ^ String.concat ", " post );
+  printf "\n.initnode: %s\n" ((fun(p : initInfo) -> p.initLoc) (Program.getInitInfo p));
   List.iter printProcedure (Program.getAllProcedures p);
-  printf "\n{ignore:true}]}";
 (*  List.iter printCall (Program.getAllCalls p);
   List.iter printReturn (Program.getAllReturns p);*)
