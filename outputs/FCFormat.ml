@@ -90,10 +90,10 @@ let rec impliesEquality c v1 v2 =
 
 let rec constraintToFcString c =
   match c with
-  | BoolTerm.True -> "    0 <= 0"
-  | BoolTerm.False -> "    1 <= 0"
+  | BoolTerm.True -> "\t\t\t\t0 <= 0"
+  | BoolTerm.False -> "\t\t\t\t1 <= 0"
   | BoolTerm.And args ->
-     ("    " ^ String.concat ",\n    " (List.map constraintToFcString args) )
+     ( String.concat ",\n" (List.map constraintToFcString args) )
   | BoolTerm.Exists (_, body) -> (* Fresh variables are implictly existentially quantified in conditions *)
      constraintToFcString body
   | BoolTerm.Forall _ ->
@@ -102,7 +102,7 @@ let rec constraintToFcString c =
      raise (FcOutputException "Found unexpected negation in normalized constraint")
   | BoolTerm.Or args ->
      raise (FcOutputException "Found unexpected disjunct in normalized constraint")
-  | a -> BoolTerm.to_string_infix_vpp a t2_var_pp
+  | a -> ("\t\t\t\t" ^ BoolTerm.to_string_infix_vpp a t2_var_pp)
 
 let output p terminationOnly =
   if Program.hasNonIntVars p then
@@ -130,11 +130,11 @@ let output p terminationOnly =
     let preVars = List.map fst preVars in
     let postVars = List.map fst postVars in
     let (unchangedPreVars, unchangedPostVars) = computeUnchangedVars preVars postVars constr in
-    printf "{name : %s, source : %s, target: %s, constraints: [\n" t l l';
-    List.iter2 (fun preV postV -> printf "    %s = %s,\n" (t2_var_pp preV) (t2_var_pp postV))
+    printf "\t\t{\n\t\t\tname : %s,\n\t\t\tsource : %s,\n\t\t\ttarget: %s,\n\t\t\tconstraints: [\n" t l l';
+    List.iter2 (fun preV postV -> printf "\t\t\t\t%s = %s,\n" (t2_var_pp preV) (t2_var_pp postV))
       (Utils.removeAll (=) preVars unchangedPreVars)
       (Utils.removeAll (=) postVars unchangedPostVars);
-    printf "%s \n]},\n"(constraintToFcString constr);
+    printf "%s \n\t\t\t]\n\t\t},\n"(constraintToFcString constr);
   in
 
   (*let rec printTransList tag (id : int) (trans: transition list) =
@@ -178,11 +178,11 @@ let output p terminationOnly =
   let (pre, post) = getVarsProcs (Program.getAllProcedures p) [] []
   in
   printf "{";
-  printf "vars : [\n%s\n],\n" ("  " ^ String.concat ", " (List.map t2_var_pp pre) );
-  printf "\npvars : [\n%s\n],\n"("  " ^ String.concat ", " (List.map t2_var_pp post) );
-  printf "\ninitnode : %s,\n" ((fun(p : initInfo) -> p.initLoc) (Program.getInitInfo p));
-  printf "\ntransitions : [\n";
+  printf "\n\tvars : [\n%s\n\t],\n" ("\t\t" ^ String.concat ", " (List.map t2_var_pp pre) );
+  printf "\n\tpvars : [\n%s\n\t],\n"("\t\t" ^ String.concat ", " (List.map t2_var_pp post) );
+  printf "\n\tinitnode : %s,\n" ((fun(p : initInfo) -> p.initLoc) (Program.getInitInfo p));
+  printf "\n\ttransitions : [\n";
   List.iter printProcedure (Program.getAllProcedures p);
-  printf "\n{ignore:true}]}";
+  printf "\t\t{ignore:true}\n\t]\n}";
 (*  List.iter printCall (Program.getAllCalls p);
   List.iter printReturn (Program.getAllReturns p);*)
